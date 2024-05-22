@@ -1,0 +1,200 @@
+---
+title: "Cyclistic Data"
+author: "Muzammal"
+date: "2024-05-22"
+output:
+  slidy_presentation: default
+  powerpoint_presentation: default
+---
+
+# Cyclistic Data Analysis
+Note: Cyclistic is a fake online bike renting company based in Chicago.Data set was taken from [link](https://divvy-tripdata.s3.amazonaws.com/index.html)
+
+
+## 1st we will intsall and load required packages
+```{r}
+
+#Loading the packages
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(data.table)
+library(dplyr)
+```
+
+### then, import all the csv files in RStudio
+```{r}
+jan_2021 <- read_csv("Cyclist Data/202101-divvy-tripdata.csv")
+feb_2021 <- read_csv("Cyclist Data/202102-divvy-tripdata.csv")
+mar_2021 <- read_csv("Cyclist Data/202103-divvy-tripdata.csv")
+apr_2021 <- read_csv("Cyclist Data/202104-divvy-tripdata.csv")
+may_2021 <- read_csv("Cyclist Data/202105-divvy-tripdata.csv")
+jun_2021 <- read_csv("Cyclist Data/202106-divvy-tripdata.csv")
+jul_2021 <- read_csv("Cyclist Data/202107-divvy-tripdata.csv")
+aug_2021 <- read_csv("Cyclist Data/202108-divvy-tripdata.csv")
+sep_2021 <- read_csv("Cyclist Data/202109-divvy-tripdata.csv")
+oct_2021 <- read_csv("Cyclist Data/202110-divvy-tripdata.csv")
+nov_2021 <- read_csv("Cyclist Data/202111-divvy-tripdata.csv")
+dec_2021 <- read_csv("Cyclist Data/202112-divvy-tripdata.csv")
+```
+
+### Review the file's data and types of columns
+```{r}
+str(jan_2021)
+str(feb_2021)
+str(mar_2021)
+str(apr_2021)
+str(may_2021)
+str(jun_2021)
+str(jul_2021)
+str(aug_2021)
+str(sep_2021)
+str(oct_2021)
+str(nov_2021)
+str(dec_2021)
+```
+
+### Combine all the datasets in a new Data frame
+```{r}
+temp <- list.files("G:/Database/R Codes/Cyclistic/Cyclist Data", full.names = TRUE, pattern = "\\.csv$")
+
+# Read all files and combine them using bind_rows
+combined_trip_data <- bind_rows(lapply(temp, read.csv))
+
+# Check the result
+print(combined_trip_data)
+```
+
+### Clean the dataset and remove null values
+
+```{r}
+combined_trip_data <- remove_empty(combined_trip_data, which = c("rows", "cols"))
+print(combined_trip_data)
+str(combined_trip_data)
+```
+
+### Calculate trip duration in minutes and hours
+
+```{r}
+combined_trip_data <- combined_trip_data %>%
+  mutate(
+    start_time = as.POSIXct(started_at, format = "%Y-%m-%d %H:%M:%S"),
+    end_time = as.POSIXct(ended_at, format = "%Y-%m-%d %H:%M:%S"),
+    trip_duration_minutes = as.numeric(difftime(end_time, start_time, units = "mins")),
+    trip_duration_hours = trip_duration_minutes / 60
+  )
+```
+
+### Calculate the average trip duration time by user type
+```{r}
+average_trip_duration <- combined_trip_data %>%
+  summarise(
+    avg_duration_minutes = mean(trip_duration_minutes, na.rm = TRUE),
+    avg_duration_hours = mean(trip_duration_hours, na.rm = TRUE)
+  )
+
+# Print average trip duration
+print(average_trip_duration)
+```
+
+### Calculate te total number of members and casual users
+
+```{r}
+user_type_counts <- combined_trip_data %>%
+  count(member_casual)
+# Print user type counts
+print(user_type_counts)
+```
+
+### Calculate te total number of bikes used by bike type
+
+```{r}
+bike_type_counts <- combined_trip_data %>%
+  count(rideable_type)
+# Print bike types count
+print(bike_type_counts)
+```
+
+## Now finally visualize the data to answer business question
+Question: How do annual members and casual riders use Cyclistic bikes differently?
+
+```{r}
+library(ggplot2)
+```
+
+### Number of trips by user type 
+
+```{r}
+ggplot(combined_trip_data, aes(x = member_casual)) +
+  geom_bar() +
+  ggtitle("Number of Trips by User Type") +
+  xlab("User Type") +
+  ylab("Number of Trips")
+```
+
+### Number of trip by user type using Pie chart
+
+```{r}
+bike_usage_by_user <- combined_trip_data %>%
+  group_by(member_casual, rideable_type) %>%
+  summarise(count = n())
+
+ggplot(bike_usage_by_user, aes(x = "User Type", y = count, fill = member_casual)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y") +
+  facet_wrap(~member_casual) +
+  ggtitle("Proportion of Bike Types Used by User Type") +
+  scale_fill_discrete(name = "Bike Type")
+
+```
+
+### Distribution of trip duration by user type
+
+```{r}
+cleaned_trip_data <- combined_trip_data %>%
+  filter(is.finite(trip_duration_minutes))
+
+# Create the plot
+ggplot(cleaned_trip_data, aes(x = trip_duration_minutes, fill = member_casual)) +
+  geom_histogram(binwidth = 5, position = "dodge") +
+  ggtitle("Distribution of Trip Duration by User Type") +
+  xlab("Trip Duration (minutes)") +
+  ylab("Frequency") +
+  scale_fill_discrete(name = "User Type")
+```
+
+### Average trip duration by user type
+
+```{r}
+combined_trip_data$date <- as.Date(combined_trip_data$start_time)
+
+average_trip_duration_over_time <- combined_trip_data %>%
+  group_by(date, member_casual) %>%
+  summarise(avg_duration = mean(trip_duration_minutes, na.rm = TRUE))
+
+ggplot(average_trip_duration_over_time, aes(x = date, y = avg_duration, color = member_casual)) +
+  geom_line() +
+  ggtitle("Average Trip Duration Over Time by User Type") +
+  xlab("Date") +
+  ylab("Average Trip Duration (minutes)") +
+  scale_color_discrete(name = "User Type")
+```
+
+### trip duration in hours by different user types
+
+```{r}
+combined_trip_data$hour <- format(combined_trip_data$start_time, "%H")
+
+trip_counts_by_hour <- combined_trip_data %>%
+  group_by(hour, member_casual) %>%
+  summarise(count = n())
+
+# Visualization
+ggplot(trip_counts_by_hour, aes(x = hour, y = member_casual, fill = count)) +
+  geom_tile() +
+  ggtitle("Trip Count by Hour and User Type") +
+  xlab("Hour of Day") +
+  ylab("User Type") +
+  scale_fill_gradient(low = "white", high = "blue", name = "Trip Count")
+```
+
